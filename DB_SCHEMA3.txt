@@ -1,0 +1,514 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 16.4
+-- Dumped by pg_dump version 16.4
+
+-- Started on 2024-09-26 11:28:00
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- TOC entry 5 (class 2615 OID 2200)
+-- Name: public; Type: SCHEMA; Schema: -; Owner: pg_database_owner
+--
+
+CREATE SCHEMA public;
+
+
+ALTER SCHEMA public OWNER TO pg_database_owner;
+
+--
+-- TOC entry 4912 (class 0 OID 0)
+-- Dependencies: 5
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: pg_database_owner
+--
+
+COMMENT ON SCHEMA public IS 'standard public schema';
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- TOC entry 224 (class 1259 OID 19127)
+-- Name: article_topics; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.article_topics (
+    article_id integer NOT NULL,
+    topic_id integer NOT NULL,
+    topic_weight real
+);
+
+
+ALTER TABLE public.article_topics OWNER TO postgres;
+
+--
+-- TOC entry 219 (class 1259 OID 19088)
+-- Name: articles; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.articles (
+    article_id integer NOT NULL,
+    newspaper_id integer,
+    title character varying(255),
+    content text,
+    embedding_vector bytea,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    embedding_vector_cube public.cube,
+    embedding_vector_binary bytea,
+    embedding_vector_array double precision[]
+);
+
+
+ALTER TABLE public.articles OWNER TO postgres;
+
+--
+-- TOC entry 218 (class 1259 OID 19087)
+-- Name: articles_article_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.articles_article_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.articles_article_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4913 (class 0 OID 0)
+-- Dependencies: 218
+-- Name: articles_article_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.articles_article_id_seq OWNED BY public.articles.article_id;
+
+
+--
+-- TOC entry 221 (class 1259 OID 19104)
+-- Name: entities; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.entities (
+    entity_id integer NOT NULL,
+    article_id integer,
+    entity_type character varying(255),
+    entity_value character varying(255),
+    start_pos integer,
+    end_pos integer,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.entities OWNER TO postgres;
+
+--
+-- TOC entry 220 (class 1259 OID 19103)
+-- Name: entities_entity_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.entities_entity_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.entities_entity_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4914 (class 0 OID 0)
+-- Dependencies: 220
+-- Name: entities_entity_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.entities_entity_id_seq OWNED BY public.entities.entity_id;
+
+
+--
+-- TOC entry 227 (class 1259 OID 19154)
+-- Name: entity_sentiments; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.entity_sentiments (
+    id integer NOT NULL,
+    entity_id integer,
+    sentiment_pos double precision,
+    sentiment_neg double precision,
+    sentiment_neu double precision,
+    sentiment_compound double precision
+);
+
+
+ALTER TABLE public.entity_sentiments OWNER TO postgres;
+
+--
+-- TOC entry 226 (class 1259 OID 19153)
+-- Name: entity_sentiments_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.entity_sentiments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.entity_sentiments_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4915 (class 0 OID 0)
+-- Dependencies: 226
+-- Name: entity_sentiments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.entity_sentiments_id_seq OWNED BY public.entity_sentiments.id;
+
+
+--
+-- TOC entry 229 (class 1259 OID 19166)
+-- Name: faiss_index; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.faiss_index (
+    index_id integer NOT NULL,
+    article_id integer,
+    faiss_vector bytea
+);
+
+
+ALTER TABLE public.faiss_index OWNER TO postgres;
+
+--
+-- TOC entry 228 (class 1259 OID 19165)
+-- Name: faiss_index_index_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.faiss_index_index_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.faiss_index_index_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4916 (class 0 OID 0)
+-- Dependencies: 228
+-- Name: faiss_index_index_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.faiss_index_index_id_seq OWNED BY public.faiss_index.index_id;
+
+
+--
+-- TOC entry 225 (class 1259 OID 19142)
+-- Name: geocoded_locations; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.geocoded_locations (
+    entity_id integer NOT NULL,
+    latitude numeric(9,6),
+    longitude numeric(9,6),
+    geocoding_source character varying(255),
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.geocoded_locations OWNER TO postgres;
+
+--
+-- TOC entry 217 (class 1259 OID 19079)
+-- Name: newspapers; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.newspapers (
+    newspaper_id integer NOT NULL,
+    title character varying(255) NOT NULL,
+    publication_date date NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    toc text,
+    hyperlink text
+);
+
+
+ALTER TABLE public.newspapers OWNER TO postgres;
+
+--
+-- TOC entry 216 (class 1259 OID 19078)
+-- Name: newspapers_newspaper_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.newspapers_newspaper_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.newspapers_newspaper_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4917 (class 0 OID 0)
+-- Dependencies: 216
+-- Name: newspapers_newspaper_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.newspapers_newspaper_id_seq OWNED BY public.newspapers.newspaper_id;
+
+
+--
+-- TOC entry 223 (class 1259 OID 19119)
+-- Name: topics; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.topics (
+    topic_id integer NOT NULL,
+    topic_name character varying(100) NOT NULL,
+    description text
+);
+
+
+ALTER TABLE public.topics OWNER TO postgres;
+
+--
+-- TOC entry 222 (class 1259 OID 19118)
+-- Name: topics_topic_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.topics_topic_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.topics_topic_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4918 (class 0 OID 0)
+-- Dependencies: 222
+-- Name: topics_topic_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.topics_topic_id_seq OWNED BY public.topics.topic_id;
+
+
+--
+-- TOC entry 4732 (class 2604 OID 19091)
+-- Name: articles article_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.articles ALTER COLUMN article_id SET DEFAULT nextval('public.articles_article_id_seq'::regclass);
+
+
+--
+-- TOC entry 4735 (class 2604 OID 19107)
+-- Name: entities entity_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entities ALTER COLUMN entity_id SET DEFAULT nextval('public.entities_entity_id_seq'::regclass);
+
+
+--
+-- TOC entry 4739 (class 2604 OID 19157)
+-- Name: entity_sentiments id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entity_sentiments ALTER COLUMN id SET DEFAULT nextval('public.entity_sentiments_id_seq'::regclass);
+
+
+--
+-- TOC entry 4740 (class 2604 OID 19169)
+-- Name: faiss_index index_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.faiss_index ALTER COLUMN index_id SET DEFAULT nextval('public.faiss_index_index_id_seq'::regclass);
+
+
+--
+-- TOC entry 4729 (class 2604 OID 19082)
+-- Name: newspapers newspaper_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.newspapers ALTER COLUMN newspaper_id SET DEFAULT nextval('public.newspapers_newspaper_id_seq'::regclass);
+
+
+--
+-- TOC entry 4737 (class 2604 OID 19122)
+-- Name: topics topic_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.topics ALTER COLUMN topic_id SET DEFAULT nextval('public.topics_topic_id_seq'::regclass);
+
+
+--
+-- TOC entry 4750 (class 2606 OID 19131)
+-- Name: article_topics article_topics_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.article_topics
+    ADD CONSTRAINT article_topics_pkey PRIMARY KEY (article_id, topic_id);
+
+
+--
+-- TOC entry 4744 (class 2606 OID 19097)
+-- Name: articles articles_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.articles
+    ADD CONSTRAINT articles_pkey PRIMARY KEY (article_id);
+
+
+--
+-- TOC entry 4746 (class 2606 OID 19112)
+-- Name: entities entities_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entities
+    ADD CONSTRAINT entities_pkey PRIMARY KEY (entity_id);
+
+
+--
+-- TOC entry 4754 (class 2606 OID 19159)
+-- Name: entity_sentiments entity_sentiments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entity_sentiments
+    ADD CONSTRAINT entity_sentiments_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4756 (class 2606 OID 19173)
+-- Name: faiss_index faiss_index_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.faiss_index
+    ADD CONSTRAINT faiss_index_pkey PRIMARY KEY (index_id);
+
+
+--
+-- TOC entry 4752 (class 2606 OID 19147)
+-- Name: geocoded_locations geocoded_locations_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.geocoded_locations
+    ADD CONSTRAINT geocoded_locations_pkey PRIMARY KEY (entity_id);
+
+
+--
+-- TOC entry 4742 (class 2606 OID 19086)
+-- Name: newspapers newspapers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.newspapers
+    ADD CONSTRAINT newspapers_pkey PRIMARY KEY (newspaper_id);
+
+
+--
+-- TOC entry 4748 (class 2606 OID 19126)
+-- Name: topics topics_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.topics
+    ADD CONSTRAINT topics_pkey PRIMARY KEY (topic_id);
+
+
+--
+-- TOC entry 4759 (class 2606 OID 19132)
+-- Name: article_topics article_topics_article_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.article_topics
+    ADD CONSTRAINT article_topics_article_id_fkey FOREIGN KEY (article_id) REFERENCES public.articles(article_id);
+
+
+--
+-- TOC entry 4760 (class 2606 OID 19137)
+-- Name: article_topics article_topics_topic_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.article_topics
+    ADD CONSTRAINT article_topics_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.topics(topic_id);
+
+
+--
+-- TOC entry 4757 (class 2606 OID 19098)
+-- Name: articles articles_newspaper_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.articles
+    ADD CONSTRAINT articles_newspaper_id_fkey FOREIGN KEY (newspaper_id) REFERENCES public.newspapers(newspaper_id);
+
+
+--
+-- TOC entry 4758 (class 2606 OID 19113)
+-- Name: entities entities_article_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entities
+    ADD CONSTRAINT entities_article_id_fkey FOREIGN KEY (article_id) REFERENCES public.articles(article_id);
+
+
+--
+-- TOC entry 4762 (class 2606 OID 19160)
+-- Name: entity_sentiments entity_sentiments_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entity_sentiments
+    ADD CONSTRAINT entity_sentiments_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(entity_id);
+
+
+--
+-- TOC entry 4763 (class 2606 OID 19174)
+-- Name: faiss_index faiss_index_article_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.faiss_index
+    ADD CONSTRAINT faiss_index_article_id_fkey FOREIGN KEY (article_id) REFERENCES public.articles(article_id);
+
+
+--
+-- TOC entry 4761 (class 2606 OID 19148)
+-- Name: geocoded_locations geocoded_locations_entity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.geocoded_locations
+    ADD CONSTRAINT geocoded_locations_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(entity_id);
+
+
+-- Completed on 2024-09-26 11:28:00
+
+--
+-- PostgreSQL database dump complete
+--
+

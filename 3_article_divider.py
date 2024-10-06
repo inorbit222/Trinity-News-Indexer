@@ -3,7 +3,7 @@ import re
 import chardet
 
 # Define directories
-input_directory = r"C:\Users\SeanOffice\Documents\Trinity Journal Segmented 2"  # Directory containing the segmented 2 text files
+input_directory = r"C:\Users\SeanOffice\Documents\Trinity Journal Segmented 1"  # Directory containing the segmented 2 text files
 output_directory = r"C:\Users\SeanOffice\Documents\Trinity Journal Segmented 3"  # Directory to save the output of segmented 3 files
 
 # Ensure the output directory exists; if not, create it
@@ -98,7 +98,7 @@ def process_file(input_path, output_path):
 for filename in os.listdir(input_directory):
     if filename.lower().endswith(".txt"):  # Process only files that end with ".txt"
         input_file_path = os.path.join(input_directory, filename)  # Get the full path of the input file
-        output_file_path = os.path.join(output_directory, filename.replace("seg2", "seg3"))  # Modify the filename for the output
+        output_file_path = os.path.join(output_directory, filename.replace("seg1", "seg3"))  # Modify the filename for the output
 
         # Process the file and save the output
         process_file(input_file_path, output_file_path)

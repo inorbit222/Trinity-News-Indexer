@@ -1,9 +1,10 @@
 import os
 import re
 import psycopg2
-from datetime import datetime
+
 import configparser
 
+# Database connection using psycopg2
 # Load settings from the ini file
 config = configparser.ConfigParser()
 config.read('settings.ini')
@@ -15,7 +16,7 @@ db_user = config['database']['user']
 db_password = config['database']['password']
 db_port = config['database']['port']
 
-# Connect to the PostgreSQL database
+# Database connection using psycopg2
 def connect_db():
     try:
         conn = psycopg2.connect(
@@ -31,7 +32,7 @@ def connect_db():
         print(f"[ERROR] Could not connect to the database: {e}")
         return None
 
-# Insert newspaper data if not already present
+# Function to get or insert newspaper data
 def get_or_insert_newspaper(cursor, title, publication_date):
     try:
         cursor.execute("""
@@ -53,87 +54,71 @@ def get_or_insert_newspaper(cursor, title, publication_date):
         print(f"[ERROR] Error inserting newspaper: {e}")
         return None
 
-# Insert article into the database
-def insert_articles(cursor, articles):
-    try:
-        # Batch insert articles
-        cursor.executemany("""
-            INSERT INTO articles (newspaper_id, title, content)
-            VALUES (%s, %s, %s);
-        """, articles)
-        print(f"[INFO] Inserted {len(articles)} articles.")
-    except psycopg2.Error as e:
-        print(f"[ERROR] Error inserting articles: {e}")
+# Define regex to extract titles and content
+article_pattern = re.compile(r'Title:\s*(.*?)\s*Body:\s*(.*?)(?=\nTitle:|\Z)', re.DOTALL)
 
-# Process and extract articles from a single file
-def process_file(file_path, cursor):
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            file_text = file.read()
-
-        # Extract publication date from filename or file content
-        date_match = re.search(r'(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})', file_path)
-        if date_match:
-            day = int(date_match.group(1))
-            month = date_match.group(2)
-            year = int(date_match.group(3))
-            try:
-                publication_date = datetime.strptime(f'{day} {month} {year}', '%d %B %Y').date()
-            except ValueError:
-                publication_date = datetime(1900, 1, 1).date()
-        else:
-            publication_date = datetime(1900, 1, 1).date()
-
-        # Use a static newspaper title for this example (update as needed)
-        title = "Trinity Journal"
-
-        # Retrieve or insert the newspaper
-        newspaper_id = get_or_insert_newspaper(cursor, title, publication_date)
-
-        # Define regex to extract article titles and bodies
-        article_pattern = re.compile(r'(?<=\n\n)([^\n]{1,80})\n+([^\n]+\n(.+\n)*)')
-
-        # Extract articles
-        matches = list(article_pattern.finditer(file_text))
-
-        articles = []
-        for match in matches:
-            article_title = match.group(1)
-            article_body = match.group(2)
-            articles.append((newspaper_id, article_title, article_body))
-
-        # Insert articles into the database
-        insert_articles(cursor, articles)
-
-    except Exception as e:
-        print(f"[ERROR] Error processing file {file_path}: {e}")
-
-# Process all files in the directory
-def process_files(input_directory):
+def process_files_in_directory(directory_path):
     conn = connect_db()
-    if conn is None:
+    if not conn:
         return
 
     cursor = conn.cursor()
-    try:
-        for filename in os.listdir(input_directory):
-            if filename.lower().endswith(".txt"):
-                file_path = os.path.join(input_directory, filename)
-                print(f"[INFO] Processing file: {file_path}")
-                process_file(file_path, cursor)
 
-        # Commit all changes at once
-        conn.commit()
-        print("[INFO] All files processed and changes committed.")
-    except Exception as e:
-        print(f"[ERROR] Error processing files: {e}")
-        conn.rollback()  # Rollback in case of error
-    finally:
-        cursor.close()
-        conn.close()
-        print("[INFO] Database connection closed.")
+    # Iterate over all files in the directory
+    for filename in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, filename)
 
-# Main entry point
-if __name__ == "__main__":
-    input_directory = r"C:\\Users\\SeanOffice\\Documents\\Trinity Journal Segmented 3"  # Update the input directory path
-    process_files(input_directory)
+        if os.path.isfile(file_path) and filename.endswith('.txt'):
+            print(f"[INFO] Processing file: {filename}")
+
+            # Assuming title and publication_date can be inferred from the filename or content
+            title = "Trinity Journal"  # Adjust this if title varies by file
+            # Extract publication_date from filename or file content
+            # Assuming the publication_date can be extracted from filename
+            date_match = re.search(r'(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})', filename)
+            if date_match:
+                day = int(date_match.group(1))
+                month = date_match.group(2)
+                year = int(date_match.group(3))
+                try:
+                    publication_date = f"{day} {month} {year}"
+                except ValueError:
+                    print(f"[WARNING] Invalid date in filename: {filename}")
+                    continue
+            else:
+                print(f"[WARNING] Could not extract publication date from filename: {filename}")
+                continue
+
+            # Get or insert the newspaper and get the ID
+            newspaper_id = get_or_insert_newspaper(cursor, title, publication_date)
+            if not newspaper_id:
+                print(f"[ERROR] Unable to get or insert newspaper for file: {filename}")
+                continue
+
+            # Read the file content
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+
+            # Find all matches of titles and bodies
+            matches = article_pattern.findall(content)
+
+            for match in matches:
+                article_title, body = match
+                article_title = article_title.strip()
+                body = body.strip()
+
+                # Insert into database with reference to newspaper_id
+                cursor.execute("""
+                    INSERT INTO articles (title, content, newspaper_id)
+                    VALUES (%s, %s, %s)
+                """, (article_title, body, newspaper_id))
+
+    # Commit changes and close connection
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("[INFO] Database updated successfully.")
+
+# Replace with the directory path containing the text files
+directory_path = "C:\\Users\\SeanOffice\\Documents\\Trinity Journal Segmented 3"
+process_files_in_directory(directory_path)

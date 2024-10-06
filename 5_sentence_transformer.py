@@ -1,6 +1,6 @@
+from sentence_transformers import SentenceTransformer
 import psycopg2
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import configparser
 
 # Load settings from the ini file
@@ -14,7 +14,7 @@ db_user = config['database']['user']
 db_password = config['database']['password']
 db_port = config['database']['port']
 
-# Connect to PostgreSQL database
+# Establish the database connection
 def connect_db():
     try:
         conn = psycopg2.connect(
@@ -30,33 +30,50 @@ def connect_db():
         print(f"[ERROR] Could not connect to the database: {e}")
         return None
 
-# Function to generate and store embeddings
-def generate_and_store_embeddings():
-    # Initialize the sentence transformer model
-    model = SentenceTransformer('sentence-transformers/gtr-t5-large')
-    
-    # Connect to the database
+# Initialize the sentence transformer model
+model = SentenceTransformer('sentence-transformers/gtr-t5-large')
+
+# Generator function to yield batches of articles
+def article_batch_generator(cursor, batch_size=100):
+    offset = 0
+    while True:
+        cursor.execute("""
+            SELECT article_id, content FROM articles 
+            WHERE embedding_vector_binary IS NULL 
+            ORDER BY article_id 
+            LIMIT %s OFFSET %s
+        """, (batch_size, offset))
+        results = cursor.fetchall()
+        if not results:
+            break
+        yield results
+        offset += batch_size
+
+# Embedding articles in batches and storing in two formats
+def process_articles_in_batches(batch_size=100):
     conn = connect_db()
-    if conn is None:
+    if not conn:
         return
 
-    with conn.cursor() as cur:
-        # Fetch all articles that don't have embeddings yet
-        cur.execute("SELECT article_id, content FROM articles WHERE embedding_vector_binary IS NULL;")
-        articles = cur.fetchall()
+    cursor = conn.cursor()
 
-        for article_id, content in articles:
-            # Generate the embedding for the article content
-            embedding_vector = model.encode(content, convert_to_numpy=True)
+    for batch in article_batch_generator(cursor, batch_size):
+        articles = [article[1] for article in batch]
+        article_ids = [article[0] for article in batch]
 
-            # 1. Store the embedding as a binary bytea format (byte stream)
-            embedding_binary = embedding_vector.tobytes()  # Convert numpy array to binary format (bytea)
+        # Embed the batch
+        embeddings = model.encode(articles, convert_to_numpy=True)
+
+        # Insert/update embeddings into the database
+        for article_id, embedding_vector in zip(article_ids, embeddings):
+            # 1. Store the embedding as a binary bytea format
+            embedding_binary = embedding_vector.tobytes()
 
             # 2. Store the embedding as a NumPy array (PostgreSQL array format)
-            embedding_array = embedding_vector.tolist()  # Convert numpy array to list for PostgreSQL
+            embedding_array = embedding_vector.tolist()
 
             # Update the article row with the generated embeddings (binary and array)
-            cur.execute("""
+            cursor.execute("""
                 UPDATE articles 
                 SET embedding_vector_binary = %s, embedding_vector_array = %s 
                 WHERE article_id = %s;
@@ -64,8 +81,9 @@ def generate_and_store_embeddings():
 
         conn.commit()
 
+    cursor.close()
     conn.close()
-    print("Embeddings generated and stored successfully.")
+    print("[INFO] Embeddings generated and stored successfully.")
 
-# Run the embedding generation process
-generate_and_store_embeddings()
+# Call the function with the desired batch size
+process_articles_in_batches(batch_size=100)

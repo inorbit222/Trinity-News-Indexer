@@ -1,6 +1,10 @@
 import os
 import re
 import chardet  # Used for detecting encoding
+import torch
+
+# Check if CUDA is available and set device
+device = 0 if torch.cuda.is_available() else -1  # 0 for GPU, -1 for CPU
 
 # Define directories
 input_directory = r"C:\Users\SeanOffice\Documents\Trinity Journal Segmented 1"  # Input directory for raw text files

@@ -2,21 +2,34 @@ import re
 import os
 import psycopg2
 from datetime import datetime
+import configparser
 
-# Connect to the PostgreSQL database
+# Database connection using psycopg2
+# Load settings from the ini file
+config = configparser.ConfigParser()
+config.read('settings.ini')
+
+# Access database settings from settings.ini
+db_host = config['database']['host']
+db_name = config['database']['database']
+db_user = config['database']['user']
+db_password = config['database']['password']
+db_port = config['database']['port']
+
+# Database connection using psycopg2
 def connect_db():
     try:
         conn = psycopg2.connect(
-            dbname='Trinity Journal',  # Replace with your database name
-            user='postgres',           # Replace with your username
-            password='skagen22',       # Replace with your password
-            host='localhost',
-            port='5432'
+            host=db_host,
+            database=db_name,
+            user=db_user,
+            password=db_password,
+            port=db_port
         )
-        conn.autocommit = True
+        print("[INFO] Database connection successful.")
         return conn
     except psycopg2.Error as e:
-        print(f"Error connecting to database: {e}")
+        print(f"[ERROR] Could not connect to the database: {e}")
         return None
 
 # Insert newspaper data with TOC and hyperlink

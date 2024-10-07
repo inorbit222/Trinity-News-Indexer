@@ -2,6 +2,10 @@ from sentence_transformers import SentenceTransformer
 import psycopg2
 import numpy as np
 import configparser
+import torch
+
+# Check if CUDA is available and set device
+device = 0 if torch.cuda.is_available() else -1  # 0 for GPU, -1 for CPU
 
 # Load settings from the ini file
 config = configparser.ConfigParser()
@@ -39,7 +43,7 @@ def article_batch_generator(cursor, batch_size=100):
     while True:
         cursor.execute("""
             SELECT article_id, content FROM articles 
-            WHERE embedding_vector_binary IS NULL 
+            WHERE embedding_vector IS NULL 
             ORDER BY article_id 
             LIMIT %s OFFSET %s
         """, (batch_size, offset))
@@ -75,7 +79,7 @@ def process_articles_in_batches(batch_size=100):
             # Update the article row with the generated embeddings (binary and array)
             cursor.execute("""
                 UPDATE articles 
-                SET embedding_vector_binary = %s, embedding_vector_array = %s 
+                SET embedding_vector = %s, embedding_vector_array = %s 
                 WHERE article_id = %s;
             """, (psycopg2.Binary(embedding_binary), embedding_array, article_id))
 

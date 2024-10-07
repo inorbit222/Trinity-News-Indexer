@@ -2,6 +2,10 @@ import os
 import re
 import configparser
 import chardet
+import torch
+
+# Check if CUDA is available and set device
+device = 0 if torch.cuda.is_available() else -1  # 0 for GPU, -1 for CPU
 
 # Define directories
 output_directory = r"C:\Users\SeanOffice\Documents\Trinity Journal Segmented 1"  # Directory to store the segmented output files

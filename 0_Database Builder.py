@@ -53,7 +53,8 @@ def create_tables(cursor):
             content TEXT,
             embedding_vector BYTEA,  -- Embeddings will be stored here
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            embedding_vector_array NUMERIC[]
         );
         """,
         """

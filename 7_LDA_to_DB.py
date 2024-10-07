@@ -3,25 +3,42 @@ import nltk
 from nltk.corpus import stopwords
 from gensim import corpora
 from gensim.models.ldamodel import LdaModel
+import configparser
+import torch
+
+# Check if CUDA is available and set device
+device = 0 if torch.cuda.is_available() else -1  # 0 for GPU, -1 for CPU
 
 # Ensure stopwords are downloaded
 nltk.download('stopwords')
 stop_words = set(stopwords.words('english'))
 
-# Database connection function
+# Database connection using psycopg2
+# Load settings from the ini file
+config = configparser.ConfigParser()
+config.read('settings.ini')
+
+# Access database settings from settings.ini
+db_host = config['database']['host']
+db_name = config['database']['database']
+db_user = config['database']['user']
+db_password = config['database']['password']
+db_port = config['database']['port']
+
+# Database connection using psycopg2
 def connect_db():
     try:
         conn = psycopg2.connect(
-            host="localhost",
-            database="Trinity Journal",
-            user="postgres",
-            password="skagen22",
-            port="5432"
+            host=db_host,
+            database=db_name,
+            user=db_user,
+            password=db_password,
+            port=db_port
         )
         print("[INFO] Database connection successful.")
         return conn
     except psycopg2.Error as e:
-        print(f"[ERROR] Error connecting to database: {e}")
+        print(f"[ERROR] Could not connect to the database: {e}")
         return None
 
     # Step 3: Fetch articles from the database
@@ -63,22 +80,37 @@ def train_lda_model(corpus, dictionary, num_topics=20):
 
 # Step 7: Store LDA topics in PostgreSQL with conflict handling
 def store_lda_topics(conn, cursor, lda_model, corpus, processed_texts):
-    print("[INFO] Storing LDA topics in the database...")
-
-    for i, doc in enumerate(corpus):
-        article_id = processed_texts[i][0]
-        topic_distribution = lda_model.get_document_topics(doc)
-
-        for topic_id, weight in topic_distribution:
-            cursor.execute("""
-                INSERT INTO topics (article_id, topic_id, topic_weight)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (article_id, topic_id)
-                DO UPDATE SET topic_weight = EXCLUDED.topic_weight;
-            """, (article_id, topic_id, float(weight)))
-
+    # Step 1: Insert topics into the `topics` table
+    print("[INFO] Storing topics in the topics table...")
+    for topic_id, topic_terms in lda_model.show_topics(formatted=False):
+        topic_words = " ".join([word for word, prob in topic_terms])
+        
+        # Insert the topic into the topics table, avoiding duplicates
+        cursor.execute("""
+            INSERT INTO topics (topic_id, topic_name)
+            VALUES (%s, %s)
+            ON CONFLICT (topic_id) DO NOTHING;  -- Avoid inserting duplicate topics
+        """, (topic_id, topic_words))
+    
+    # Commit after inserting all topics
     conn.commit()
-    print("[INFO] LDA topics have been successfully stored in the database.")
+
+    # Step 2: Insert relationships into `article_topics`
+    print("[INFO] Storing article-topic relationships...")
+    for i, bow in enumerate(corpus):
+        article_id = processed_texts[i][0]  # Extract the article_id from processed_texts
+
+        # For each topic related to the article, insert the relationship into article_topics
+        for topic_id, score in lda_model.get_document_topics(bow):
+            cursor.execute("""
+                INSERT INTO article_topics (article_id, topic_id)
+                VALUES (%s, %s);
+            """, (article_id, topic_id))
+    
+    conn.commit()
+    print("[INFO] LDA topics and relationships have been successfully stored in the database.")
+
+
 
 # Main function to run the LDA pipeline
 def run_lda_pipeline():

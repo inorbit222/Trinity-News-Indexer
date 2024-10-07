@@ -3,6 +3,10 @@ import re
 import psycopg2
 
 import configparser
+import torch
+
+# Check if CUDA is available and set device
+device = 0 if torch.cuda.is_available() else -1  # 0 for GPU, -1 for CPU
 
 # Database connection using psycopg2
 # Load settings from the ini file

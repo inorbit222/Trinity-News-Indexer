@@ -2,7 +2,14 @@ from sentence_transformers import SentenceTransformer
 import psycopg2
 import numpy as np
 import configparser
+import logging
 import torch
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Check if CUDA is available and set device
 device = 0 if torch.cuda.is_available() else -1  # 0 for GPU, -1 for CPU
@@ -18,7 +25,7 @@ db_user = config['database']['user']
 db_password = config['database']['password']
 db_port = config['database']['port']
 
-# Establish the database connection
+# Connect to PostgreSQL database
 def connect_db():
     try:
         conn = psycopg2.connect(
@@ -28,10 +35,10 @@ def connect_db():
             password=db_password,
             port=db_port
         )
-        print("[INFO] Database connection successful.")
+        logging.info("[INFO] Connected to the database.")
         return conn
     except psycopg2.Error as e:
-        print(f"[ERROR] Could not connect to the database: {e}")
+        logging.error(f"[ERROR] Could not connect to the database: {e}")
         return None
 
 # Initialize the sentence transformer model
@@ -61,33 +68,37 @@ def process_articles_in_batches(batch_size=100):
 
     cursor = conn.cursor()
 
-    for batch in article_batch_generator(cursor, batch_size):
-        articles = [article[1] for article in batch]
-        article_ids = [article[0] for article in batch]
+    try:
+        for batch in article_batch_generator(cursor, batch_size):
+            articles = [article[1] for article in batch]
+            article_ids = [article[0] for article in batch]
 
-        # Embed the batch
-        embeddings = model.encode(articles, convert_to_numpy=True)
+            # Embed the batch
+            embeddings = model.encode(articles, convert_to_numpy=True)
 
-        # Insert/update embeddings into the database
-        for article_id, embedding_vector in zip(article_ids, embeddings):
-            # 1. Store the embedding as a binary bytea format
-            embedding_binary = embedding_vector.tobytes()
+            # Insert/update embeddings into the database
+            for article_id, embedding_vector in zip(article_ids, embeddings):
+                embedding_binary = embedding_vector.tobytes()
+                embedding_array = embedding_vector.tolist()
 
-            # 2. Store the embedding as a NumPy array (PostgreSQL array format)
-            embedding_array = embedding_vector.tolist()
+                cursor.execute("""
+                    UPDATE articles 
+                    SET embedding_vector = %s, embedding_vector_array = %s 
+                    WHERE article_id = %s;
+                """, (psycopg2.Binary(embedding_binary), embedding_array, article_id))
 
-            # Update the article row with the generated embeddings (binary and array)
-            cursor.execute("""
-                UPDATE articles 
-                SET embedding_vector = %s, embedding_vector_array = %s 
-                WHERE article_id = %s;
-            """, (psycopg2.Binary(embedding_binary), embedding_array, article_id))
+            conn.commit()
+            logging.info(f"[INFO] Processed and updated {len(batch)} articles.")
 
-        conn.commit()
+    except psycopg2.Error as e:
+        logging.error(f"[ERROR] Database error occurred: {e}")
+        conn.rollback()  # Roll back on error
 
-    cursor.close()
-    conn.close()
-    print("[INFO] Embeddings generated and stored successfully.")
+    finally:
+        cursor.close()
+        conn.close()
+        logging.info("[INFO] Database connection closed.")
 
 # Call the function with the desired batch size
-process_articles_in_batches(batch_size=100)
+if __name__ == "__main__":
+    process_articles_in_batches(batch_size=100)

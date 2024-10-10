@@ -31,11 +31,18 @@ def process_file(file_path, output_path):
     with open(file_path, 'r', encoding=encoding) as file:
         newspaper_text = file.read()  # Read the entire file as a single string
 
+    # Capture the first line separately before applying the regex pattern
+    first_line = newspaper_text.split('\n', 1)[0]  # Get the first line
+
     # Define a regular expression pattern to identify titles and their corresponding bodies
     title_body_pattern = re.compile(r'([A-Z\s,\'\.]+)(?:\n|\n\n)(.+?)(?=\n[A-Z\s,\'\.]+\n|\n\n|\Z)', re.DOTALL)
 
     # Open the output file to write the processed data
     with open(output_path, 'w', encoding='utf-8') as output_file:
+
+        # First, write the first line of the file (preserved from the original file)
+        output_file.write(f"First Line: {first_line}\n\n")  # Save the first line as is
+
         # Loop through all matches found in the input file based on the regular expression pattern
         for match in title_body_pattern.finditer(newspaper_text):
             # Capture the title and body from the matched text

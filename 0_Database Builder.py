@@ -1,6 +1,11 @@
 #Database Builder
 import configparser
 import psycopg2
+import logging
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 # Load settings from the ini file
 config = configparser.ConfigParser()
@@ -23,10 +28,12 @@ def connect_db():
             password=db_password,
             port=db_port
         )
+        logging.info("[INFO] Connected to the database.")
         print("[INFO] Database connection successful.")
         return conn
     except psycopg2.Error as e:
         print(f"[ERROR] Could not connect to the database: {e}")
+        logging.error(f"[ERROR] Could not connect to the database: {e}")
         return None
 
 
@@ -34,6 +41,8 @@ def connect_db():
 # Step 2: Create necessary tables for the project
 def create_tables(cursor):
     commands = [
+        """CREATE EXTENSION IF NOT EXISTS cube;
+        """
         """
         CREATE TABLE IF NOT EXISTS Newspapers (
             newspaper_id SERIAL PRIMARY KEY,
@@ -47,15 +56,16 @@ def create_tables(cursor):
         """,
         """
         CREATE TABLE IF NOT EXISTS Articles (
-            article_id SERIAL PRIMARY KEY,
-            newspaper_id INT REFERENCES Newspapers(newspaper_id),
-            title VARCHAR(255),
-            content TEXT,
-            embedding_vector BYTEA,  -- Embeddings will be stored here
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            embedding_vector_array NUMERIC[]
-        );
+    article_id SERIAL PRIMARY KEY,
+    newspaper_id INT REFERENCES Newspapers(newspaper_id),
+    title VARCHAR(255),
+    content TEXT,
+    embedding_vector BYTEA,  -- Embeddings will be stored here
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    embedding_vector_array NUMERIC[] -- Removed trailing comma
+);
+
         """,
         """
         CREATE TABLE IF NOT EXISTS Entities (
@@ -110,6 +120,14 @@ def create_tables(cursor):
         );
         """
     ]
+    # Add Indexes for frequently queried columns
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_articles_article_id ON articles(article_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_entities_article_id ON entities(article_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_entities_entity_value ON entities(entity_value);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_topics_topic_id ON topics(topic_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_article_topics_article_id ON article_topics(article_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_article_topics_topic_id ON article_topics(topic_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_geocoded_locations_entity_id ON geocoded_locations(entity_id);")
 
     # Execute each SQL command
     for command in commands:

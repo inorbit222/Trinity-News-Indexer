@@ -64,8 +64,8 @@ def connect_db():
         return None
 
 # Step 2: Fetch entities for geocoding
-def fetch_entities(cursor):
-    cursor.execute("SELECT entity_id, entity_value FROM entities WHERE entity_type = 'I-LOC';")
+def fetch_entities(cursor, batch_size=100, offset=0):
+    cursor.execute("SELECT entity_id, entity_value FROM entities WHERE entity_type = 'LOC' LIMIT %s OFFSET %s;", (batch_size, offset))
     entities = cursor.fetchall()
     logging.info(f"Fetched {len(entities)} entities for geocoding.")
     return entities
@@ -82,8 +82,12 @@ def geocode_entity(entity_value, geocode_cache, geolocator):
 
     # Perform geocoding if not already cached
     logging.info(f"Geocoding {cleaned_entity}")
-    location = geolocator.geocode(cleaned_entity, timeout=10)
-    
+    try:
+        location = geolocator.geocode(cleaned_entity, timeout=10)
+    except Exception as e:
+        logging.error(f"Error during geocoding {cleaned_entity}: {e}")
+        return None, None, None
+
     if location:
         result = (location.latitude, location.longitude, location.raw.get('display_name'))
         logging.info(f"Found location for {cleaned_entity}: {result}")
@@ -95,15 +99,19 @@ def geocode_entity(entity_value, geocode_cache, geolocator):
     geocode_cache[cleaned_entity] = result
     return result
 
-# Step 4: Store geocoded locations in database
+# Step 4: Store geocoded locations in the database
 def store_geocoded_location(cursor, entity_id, latitude, longitude, source):
-    cursor.execute("""
-        INSERT INTO geocoded_locations (entity_id, latitude, longitude, geocoding_source)
-        VALUES (%s, %s, %s, %s);
-    """, (entity_id, latitude, longitude, source))
+    try:
+        cursor.execute("""
+            INSERT INTO geocoded_locations (entity_id, latitude, longitude, geocoding_source)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (entity_id) DO NOTHING;  -- Avoid inserting duplicates
+        """, (entity_id, latitude, longitude, source))
+    except Exception as e:
+        logging.error(f"Error inserting geocoded location for entity_id {entity_id}: {e}")
 
-# Step 5: Main function to run geocoding and store results
-def run_geo_pipeline():
+# Step 5: Main function to run geocoding and store results with batching and error handling
+def run_geo_pipeline(batch_size=100):
     logging.info("Starting geocoding process...")
     
     conn = connect_db()
@@ -116,26 +124,33 @@ def run_geo_pipeline():
     geolocator = Nominatim(user_agent="geo_coder", timeout=10)
     geocode_cache = {}
 
-    # Fetch entities from the database
-    entities = fetch_entities(cursor)
+    offset = 0
+    while True:
+        # Fetch entities in batches
+        entities = fetch_entities(cursor, batch_size=batch_size, offset=offset)
+        if not entities:
+            break
 
-    for entity_id, entity_value in entities:
-        logging.info(f"Processing entity ID {entity_id} with value '{entity_value}'")
-        latitude, longitude, source = geocode_entity(entity_value, geocode_cache, geolocator)
-        
-        if latitude and longitude:
-            store_geocoded_location(cursor, entity_id, latitude, longitude, source)
-            logging.info(f"Geocoded: {entity_value} -> {latitude}, {longitude}")
-        else:
-            logging.warning(f"Failed to geocode: {entity_value}")
-        
-        # Introduce rate limiting: 1 second delay between requests
-        time.sleep(1)
+        for entity_id, entity_value in entities:
+            logging.info(f"Processing entity ID {entity_id} with value '{entity_value}'")
+            latitude, longitude, source = geocode_entity(entity_value, geocode_cache, geolocator)
+            
+            if latitude and longitude:
+                store_geocoded_location(cursor, entity_id, latitude, longitude, source)
+                logging.info(f"Geocoded: {entity_value} -> {latitude}, {longitude}")
+            else:
+                logging.warning(f"Failed to geocode: {entity_value}")
+            
+            # Introduce rate limiting: 1 second delay between requests
+            time.sleep(1)
 
-    conn.commit()
+        # Commit after each batch
+        conn.commit()
+        offset += batch_size
+
     cursor.close()
     conn.close()
     logging.info("Geocoding pipeline completed.")
 
 if __name__ == "__main__":
-    run_geo_pipeline()
+    run_geo_pipeline(batch_size=100)

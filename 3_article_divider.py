@@ -30,6 +30,9 @@ def process_file(input_path, output_path):
     with open(input_path, 'r', encoding=encoding) as file:
         lines = file.readlines()
 
+    # Capture the first line separately to ensure it's preserved
+    first_line = lines[0].strip() if len(lines) > 0 else ""
+
     # Initialize variables to hold the title and body of the current article being processed
     output = []
     current_title = None
@@ -67,8 +70,10 @@ def process_file(input_path, output_path):
         output.append(f"Body: {''.join(current_body).strip()}")
         output.append("====================================\n")
 
+       
+
     # Loop through each line of the input file
-    for line in lines:
+    for line in lines[1:]:# Start from the second line to avoid reprocessing the first line
         # Start a new section when the delimiter "====================================" is found
         if "====================================" in line:
             if processing_article:
@@ -91,6 +96,9 @@ def process_file(input_path, output_path):
 
     # After looping through all lines, write the last article if it's present
     write_article()
+
+    # Write the first line (important identifier) to the output file before processing the content
+    output.append(f"NEWSPAPER ISSUE AND DATE: {first_line}\n")
 
     # Save the output to the specified output file
     with open(output_path, 'w', encoding='utf-8') as output_file:

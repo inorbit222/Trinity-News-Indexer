@@ -26,7 +26,30 @@ def detect_file_encoding(file_path):
         result = chardet.detect(raw_data)
         return result['encoding']
 
+# Cleaning function to remove unwanted characters but keep newlines intact
+def clean_text_with_newlines(text):
+    """
+    Clean the text by removing unwanted characters but keep newlines intact.
+    """
+    # Remove non-alphabetic characters except common punctuation (retain: . , ! ? ' ", newlines)
+    text = re.sub(r'[^\w.,!?\'"\s\n-]', '', text)
+    
+    # Handle hyphenated words (join lines ending with '-')
+    text = re.sub(r'(\w+)-\n(\w+)', r'\1\2', text)
+
+    # Replace multiple spaces/tabs with a single space, but keep newlines intact
+    text = re.sub(r'[ \t]+', ' ', text)
+    
+    # Strip leading/trailing whitespace from lines
+    text = '\n'.join(line.strip() for line in text.splitlines())
+
+    return text
+
 # Function to process a single file: takes a raw text file and segments it into articles
+import re
+
+# Adjusted function to process the file and handle poetry sections.
+# Function to process the file and handle articles, poetry, and advertisements
 def process_file(file_path, output_path):
     # Detect the file encoding
     encoding = detect_file_encoding(file_path)
@@ -36,39 +59,71 @@ def process_file(file_path, output_path):
     with open(file_path, 'r', encoding=encoding, errors='replace') as file:
         newspaper_text = file.read()  # Read the entire file as a single string
 
+    # Define a regular expression pattern to identify standard articles
+    
     # Define a regular expression pattern to identify article titles and their corresponding bodies
-    article_pattern = re.compile(r'(?<=\n\n)([^\n]{1,80})\n+([^\n]+\n(.+\n)*)')
+# The title should be 3 or more characters, and avoid titles that are just punctuation.
+        article_pattern = re.compile(r'(?<=\n\n)([^\n]{1,80})\n+([^\n]+\n(.+\n)*)')
+        poetry_pattern = re.compile(r'(Selected Poetry|BY [A-Z\s]+)\n+([^\n]+\n(.+\n)*)')
 
-    # Find all matches in the text (i.e., articles) and store them in a list
-    matches = list(article_pattern.finditer(newspaper_text))
+
+    # Define a pattern for identifying advertisement sections (adjust this to match your ad structure)
+    ad_pattern = re.compile(r'([A-Z\s]+(?:CO|CO\.|INC|LTD|ADVERTISEMENT|SALE|NOTICE|WHOLESALE))\n+([^\n]+\n(.+\n)*)')  # Pattern for ads (company names)
+
+    # Find all matches in the text for articles, poetry, and ads
+    article_matches = list(article_pattern.finditer(newspaper_text))
+    poetry_matches = list(poetry_pattern.finditer(newspaper_text))
+    ad_matches = list(ad_pattern.finditer(newspaper_text))
 
     # Open the output file to write the segmented articles
     with open(output_path, 'w', encoding='utf-8') as output_file:
         last_pos = 0  # This variable tracks the position of the last processed article
 
-        # Loop through all matches (i.e., each found article)
-        for match in matches:
-            # Capture the title and body of the current article
-            title = match.group(1)  # Title of the article
-            body = match.group(2)   # Body of the article
+        # Process articles
+        for match in article_matches:
+            title = match.group(1)
+            body = match.group(2)
 
-            # Write everything before the current article (uncategorized text or header information)
-            output_file.write(newspaper_text[last_pos:match.start()])
-
-            # Write the article in a structured format
-            output_file.write(f"====================================\n")  # Article delimiter
-            output_file.write(f"Title: {title}\n")  # Write the title of the article
-            output_file.write(f"Body:\n{body}\n")   # Write the body of the article
-            output_file.write(f"====================================\n\n")  # End of article delimiter
-
-            # Update the last position to the end of the current article, ensuring the next loop iteration picks up after this article
+            output_file.write(newspaper_text[last_pos:match.start()])  # Write uncategorized text before the article
+            output_file.write(f"====================================\n")
+            output_file.write(f"Title: {title}\n")
+            output_file.write(f"Body:\n{body}\n")
+            output_file.write(f"====================================\n\n")
             last_pos = match.end()
 
-        # After the last match, write any remaining text (uncategorized text or footer) to the output file
+        # Process poetry
+        for poetry_match in poetry_matches:
+            poetry_title = poetry_match.group(1)
+            poetry_body = poetry_match.group(2)
+
+            output_file.write(f"====================================\n")
+            output_file.write(f"Poetry Title: {poetry_title}\n")
+            output_file.write(f"Body:\n{poetry_body}\n")
+            output_file.write(f"====================================\n\n")
+            last_pos = poetry_match.end()
+
+        # Process advertisements
+        for ad_match in ad_matches:
+    # Check if the match has enough groups before accessing them
+            if ad_match and len(ad_match.groups()) >= 2:
+                ad_title = ad_match.group(1)
+                ad_body = ad_match.group(2)
+
+                output_file.write(f"====================================\n")
+                output_file.write(f"Advertisement Title: {ad_title}\n")
+                output_file.write(f"Body:\n{ad_body}\n")
+                output_file.write(f"====================================\n\n")
+                last_pos = ad_match.end()
+        #else:
+       #     print(f"[WARNING] Advertisement match does not contain enough groups: {ad_match}")
+
+        # Write any remaining uncategorized text
         output_file.write(newspaper_text[last_pos:])
 
     # Log that the file has been successfully processed and saved
-    print(f"Processed articles and uncategorized text saved to {output_path}")
+    print(f"Processed articles, poetry, and advertisements saved to {output_path}")
+
+
 
 # Iterate over all files in the input directory
 def process_all_files():
